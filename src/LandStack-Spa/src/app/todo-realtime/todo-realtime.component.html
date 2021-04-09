@@ -1,0 +1,21 @@
+<h1>To Do List</h1>
+
+<ul *ngIf="todos$ | async as todos">
+  <li *ngFor="let todo of todos">
+    <input
+      type="checkbox"
+      [checked]="todo.isCompleted"
+      (change)="toggle(todo)"
+    />
+    <span>{{ todo.description }}</span>
+    <button (click)="delete(todo.toDoItemId)">X</button>
+  </li>
+</ul>
+
+<form [formGroup]="addNewForm" (ngSubmit)="add()">
+  <input
+    formControlName="description"
+    type="text"
+    placeholder="Enter To Do Item..."
+  />
+</form>

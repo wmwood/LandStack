@@ -9,7 +9,7 @@ The LAND Stack is a set of software and technologies for building web base appli
 - LiteDB
 - Angular
 - Nginx
-- Dot.net
+- Dot Net (.net)
 
 ## Project Contents
 

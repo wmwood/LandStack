@@ -1,7 +1,7 @@
 ﻿/* Auto Generated */
 
 export interface ToDoItemDto {
-    toDoItemId: any;
+    toDoItemId: string;
     description: string;
     isCompleted: boolean;
     createdDate: Date;

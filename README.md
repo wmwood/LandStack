@@ -2,14 +2,14 @@
 
 Welcome to The LAND Stack.
 
-The LAND Stack is a set of software and technologies for building web based applications.
+The LAND Stack is a set of software and technologies for building web base applications.
 
 ## LAND Stands For
 
 - LiteDB
 - Angular
 - Nginx
-- Dot Net (.net)
+- Dot.net
 
 ## Project Contents
 

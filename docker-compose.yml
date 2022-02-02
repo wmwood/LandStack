@@ -1,0 +1,20 @@
+version: "3.9"
+services:
+  spa:
+    image: landstack-spa
+    build:
+      context: ./src/
+      dockerfile: ./.docker/_spa.dockerfile
+    ports:
+      - 8080:80
+  api:
+    image: landstack-api
+    build:
+      context: ./src/LandStack.Api/
+      dockerfile: ../.docker/_api.dockerfile
+    ports:
+      - 8181:80
+    volumes:
+      - appdata:/app/App_Data
+volumes:
+  appdata:

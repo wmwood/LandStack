@@ -360,3 +360,4 @@ MigrationBackup/
 *.code-workspace
 
 App_Data/
+.angular/

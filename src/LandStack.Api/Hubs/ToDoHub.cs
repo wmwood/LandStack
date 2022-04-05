@@ -1,39 +1,40 @@
 using System;
 using System.Threading.Tasks;
 using LandStack.Api.Infrastructure.Dto;
-using LandStack.Api.Infrastructure.Services;
 using Microsoft.AspNetCore.SignalR;
+using MediatR;
+using LandStack.Api.Infrastructure.Features;
+using System.Collections.Generic;
 
 namespace LandStack.Api.Hubs
 {
     public class ToDoHub : Hub
     {
-        private readonly ToDoItemService _toDoItemService;
+        private readonly IMediator _mediator;
 
-        public ToDoHub(ToDoItemService toDoItemService)
+        public ToDoHub(IMediator mediator)
         {
-            _toDoItemService = toDoItemService;
+            _mediator = mediator;
         }
 
-        public override async Task OnConnectedAsync()
+        public async Task<List<ToDoItemDto>> GetAllItems()
         {
-            await this.Clients.Client(Context.ConnectionId).SendAsync("LoadTodoItems", await _toDoItemService.GetItems());
-            await base.OnConnectedAsync();
+            return await _mediator.Send(GetAllItemsRequest.Make());
         }
 
-        public async Task Add(CreateTodoDto dto)
+        public async Task Create(CreateTodoItemDto dto)
         {
-            await _toDoItemService.Create(dto.Description);
+            await _mediator.Send(CreateTodoItemRequest.Make(dto.Description));
         }
 
-        public async Task Update(ToDoItemDto dto)
+        public async Task ToggleComplete(Guid todoItemId)
         {
-            await _toDoItemService.Update(dto);
+            await _mediator.Send(ToggleCompleteTodoItemRequest.Make(todoItemId));
         }
 
         public async Task Delete(Guid todoItemId)
         {
-            await _toDoItemService.Delete(todoItemId);
+            await _mediator.Send(DeleteTodoItemRequest.Make(todoItemId));
         }
     }
 }

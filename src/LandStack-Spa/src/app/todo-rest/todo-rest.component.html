@@ -5,7 +5,7 @@
     <input
       type="checkbox"
       [checked]="todo.isCompleted"
-      (change)="toggle(todo)"
+      (change)="toggleComplete(todo.toDoItemId)"
     />
     <span>{{ todo.description }}</span>
     <button (click)="delete(todo.toDoItemId)">X</button>

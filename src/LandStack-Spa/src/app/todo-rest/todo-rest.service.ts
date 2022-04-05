@@ -33,9 +33,11 @@ export class TodoRestService {
     );
   }
 
-  public update(dto: ToDoItemDto) {
+  public toggleComplete(todoItemId: string) {
     return this.busy.busyStream(
-      this.http.put(this._baseUrl, dto).pipe(tap(() => this.refresh()))
+      this.http
+        .post(`${this._baseUrl}/toggleComplete/${todoItemId}`, null)
+        .pipe(tap(() => this.refresh()))
     );
   }
 

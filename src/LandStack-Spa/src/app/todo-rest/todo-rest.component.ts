@@ -1,7 +1,6 @@
 import { ChangeDetectionStrategy, Component } from '@angular/core';
 import { FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { IAppRoute } from '../routes';
-import { ToDoItemDto } from '../_models/toDoItemDto';
 import { TodoRestService } from './todo-rest.service';
 
 @Component({
@@ -44,9 +43,8 @@ export class TodoRestComponent {
       });
   }
 
-  public toggle(todoItem: ToDoItemDto) {
-    todoItem.isCompleted = !todoItem.isCompleted;
-    this.todoService.update(todoItem).subscribe();
+  public toggleComplete(todoItemId: string) {
+    this.todoService.toggleComplete(todoItemId).subscribe();
   }
 
   public delete(todoItemId: string) {

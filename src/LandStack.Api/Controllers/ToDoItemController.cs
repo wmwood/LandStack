@@ -2,8 +2,8 @@
 using System.Threading.Tasks;
 using LandStack.Api.Infrastructure.Dto;
 using LandStack.Api.Infrastructure.Extensions;
-using LandStack.Api.Infrastructure.Services;
-using Microsoft.AspNetCore.Http.Extensions;
+using LandStack.Api.Infrastructure.Features;
+using MediatR;
 using Microsoft.AspNetCore.Mvc;
 
 namespace LandStack.Api.Controllers
@@ -12,42 +12,38 @@ namespace LandStack.Api.Controllers
     [Route("[controller]")]
     public class ToDoItemController : ControllerBase
     {
-        private readonly ToDoItemService _toDoItemService;
+        private readonly IMediator _mediator;
 
-        public ToDoItemController(ToDoItemService toDoItemService)
+        public ToDoItemController(IMediator mediator)
         {
-            _toDoItemService = toDoItemService;
+            _mediator = mediator;
         }
 
         [HttpGet]
-        [Route("{toDoItemId?}")]
-        public async Task<IActionResult> Get(Guid? toDoItemId)
+        public async Task<IActionResult> Get()
         {
-            if (toDoItemId.HasValue)
-                return Ok(await _toDoItemService.GetItem(toDoItemId.Value));
-
-            return Ok(await _toDoItemService.GetItems());
+            return Ok(await _mediator.Send(GetAllItemsRequest.Make()));
         }
 
         [HttpPost]
-        public async Task<IActionResult> Post([FromBody] CreateTodoDto dto)
+        public async Task<IActionResult> Post([FromBody] CreateTodoItemDto dto)
         {
-            var createdItem = await _toDoItemService.Create(dto.Description);
+            var createdItem = await _mediator.Send(CreateTodoItemRequest.Make(dto.Description));
             return base.Created(this.GetResourceUrl(createdItem.ToDoItemId), createdItem);
         }
 
-        [HttpPut]
-        public async Task<IActionResult> Put([FromBody] ToDoItemDto item)
+        [HttpPost("toggleComplete/{toDoItemId}")]
+        public async Task<IActionResult> ToggleComplete(Guid todoItemId)
         {
-            await _toDoItemService.Update(item);
+            await _mediator.Send(ToggleCompleteTodoItemRequest.Make(todoItemId));
             return Ok();
         }
 
         [HttpDelete]
         [Route("{toDoItemId}")]
-        public async Task<IActionResult> Delete(Guid toDoItemId)
+        public async Task<IActionResult> Delete(Guid todoItemId)
         {
-            await _toDoItemService.Delete(toDoItemId);
+            await _mediator.Send(DeleteTodoItemRequest.Make(todoItemId));
             return Ok();
         }
     }

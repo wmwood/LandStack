@@ -1,7 +1,6 @@
 import { Component, OnDestroy } from '@angular/core';
 import { FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { IAppRoute } from '../routes';
-import { ToDoItemDto } from '../_models/toDoItemDto';
 import { TodoRealtimeService } from './todo-realtime.service';
 
 @Component({
@@ -30,16 +29,15 @@ export class TodoRealtimeComponent implements OnDestroy {
     };
   }
 
-  public add() {
+  public create() {
     if (this.addNewForm.invalid) return;
 
-    this.todoService.add({ description: this.addNewForm.value.description });
+    this.todoService.create({ description: this.addNewForm.value.description });
     this.addNewForm.setValue({ description: '' });
   }
 
-  public toggle(todoItem: ToDoItemDto) {
-    todoItem.isCompleted = !todoItem.isCompleted;
-    this.todoService.update(todoItem);
+  public toggleComplete(todoItemId: string) {
+    this.todoService.toggleComplete(todoItemId);
   }
 
   public delete(todoItemId: string) {

@@ -7,13 +7,14 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
+using MediatR;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(policy => policy
-        .WithOrigins("http://localhost:8080")
+        .WithOrigins("http://localhost:4200")
         .AllowAnyMethod()
         .AllowAnyHeader()
         .AllowCredentials()
@@ -28,11 +29,9 @@ builder.Services.AddControllers().AddNewtonsoftJson(options =>
 });
 
 builder.Services.AddSignalR();
-
+builder.Services.AddMediatR(typeof(Program));
 builder.Services.AddSingleton<IClock, Clock>();
-builder.Services.AddSingleton<ToDoItemService, ToDoItemService>();
 builder.Services.AddSingleton<LiteDbProvider, LiteDbProvider>();
-builder.Services.AddSingleton<IToDoItemGateway, ToDoItemLiteDbGateway>();
 
 var app = builder.Build();
 

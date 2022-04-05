@@ -5,14 +5,14 @@
     <input
       type="checkbox"
       [checked]="todo.isCompleted"
-      (change)="toggle(todo)"
+      (change)="toggleComplete(todo.toDoItemId)"
     />
     <span>{{ todo.description }}</span>
     <button (click)="delete(todo.toDoItemId)">X</button>
   </li>
 </ul>
 
-<form [formGroup]="addNewForm" (ngSubmit)="add()">
+<form [formGroup]="addNewForm" (ngSubmit)="create()">
   <input
     formControlName="description"
     type="text"

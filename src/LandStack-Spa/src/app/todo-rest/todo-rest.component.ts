@@ -1,4 +1,10 @@
-import { ChangeDetectionStrategy, Component } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  DestroyRef,
+  inject,
+} from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
   UntypedFormBuilder,
   UntypedFormGroup,
@@ -17,6 +23,7 @@ import { AsyncPipe } from '@angular/common';
   imports: [ReactiveFormsModule, AsyncPipe],
 })
 export class TodoRestComponent {
+  private readonly destroyRef = inject(DestroyRef);
   public todos$ = this.todoService.todos$;
   public addNewForm: UntypedFormGroup;
 
@@ -48,16 +55,25 @@ export class TodoRestComponent {
 
     this.todoService
       .add({ description: this.addNewForm.value.description })
+      .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: () => this.addNewForm.setValue({ description: '' }),
+        // Keep the entered description available for retry after a request failure.
+        error: () => undefined,
       });
   }
 
   public toggleComplete(todoItemId: string) {
-    this.todoService.toggleComplete(todoItemId).subscribe();
+    this.todoService
+      .toggleComplete(todoItemId)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({ error: () => undefined });
   }
 
   public delete(todoItemId: string) {
-    this.todoService.delete(todoItemId).subscribe();
+    this.todoService
+      .delete(todoItemId)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({ error: () => undefined });
   }
 }

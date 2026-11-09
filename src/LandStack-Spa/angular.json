@@ -100,6 +100,12 @@
             "tsConfig": "tsconfig.spec.json",
             "buildTarget": "LandStack-Spa:build:testing"
           }
+        },
+        "lint": {
+          "options": {
+            "lintFilePatterns": ["src/**/*.ts", "src/**/*.html"]
+          },
+          "builder": "@angular-eslint/builder:lint"
         }
       }
     }

@@ -3,7 +3,6 @@ import {
   Router,
   NavigationEnd,
   ActivatedRoute,
-  Route,
   RouterLinkActive,
   RouterLink,
   RouterOutlet,
@@ -37,7 +36,7 @@ export class ShellComponent {
     private _route: ActivatedRoute
   ) {
     _router.config.forEach((r) => {
-      if (!!r.children) {
+      if (r.children) {
         this._navItems$.next(
           <IAppRoute[]>r.children.filter((c) => !!c.data?.title)
         );

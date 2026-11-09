@@ -1,19 +1,29 @@
 import { ChangeDetectionStrategy, Component } from '@angular/core';
-import { FormBuilder, FormGroup, Validators } from '@angular/forms';
+import {
+  UntypedFormBuilder,
+  UntypedFormGroup,
+  Validators,
+  ReactiveFormsModule,
+} from '@angular/forms';
 import { IAppRoute } from '../routes';
 import { TodoRestService } from './todo-rest.service';
+import { AsyncPipe } from '@angular/common';
 
 @Component({
   selector: 'app-todo-rest',
   templateUrl: './todo-rest.component.html',
   styleUrls: ['./todo-rest.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [ReactiveFormsModule, AsyncPipe],
 })
 export class TodoRestComponent {
   public todos$ = this.todoService.todos$;
-  public addNewForm: FormGroup;
+  public addNewForm: UntypedFormGroup;
 
-  constructor(private todoService: TodoRestService, fb: FormBuilder) {
+  constructor(
+    private todoService: TodoRestService,
+    fb: UntypedFormBuilder
+  ) {
     this.addNewForm = fb.group({
       description: ['', Validators.required],
     });

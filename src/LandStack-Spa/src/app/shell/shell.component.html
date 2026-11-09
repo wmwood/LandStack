@@ -1,14 +1,17 @@
 <div class="tabs is-centered is-large">
-  <ul *ngIf="navItems$ | async as navItems">
-    <li
-      *ngFor="let item of navItems"
-      routerLinkActive="is-active"
-      [routerLinkActiveOptions]="{ exact: true }"
-    >
-      <a [routerLink]="['/' + item.path]">
-        {{ item.data.title }}
-      </a>
-    </li>
-  </ul>
+  @if (navItems$ | async; as navItems) {
+    <ul>
+      @for (item of navItems; track item) {
+        <li
+          routerLinkActive="is-active"
+          [routerLinkActiveOptions]="{ exact: true }"
+        >
+          <a [routerLink]="['/' + item.path]">
+            {{ item.data.title }}
+          </a>
+        </li>
+      }
+    </ul>
+  }
 </div>
 <router-outlet></router-outlet>

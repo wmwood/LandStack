@@ -1,9 +1,15 @@
-import { Component, HostBinding, OnDestroy } from '@angular/core';
+import {
+  Component,
+  HostBinding,
+  OnDestroy,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { BusyService } from './busy.service';
 
 @Component({
   selector: 'app-busy',
   templateUrl: './busy.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./busy.component.scss'],
 })
 export class BusyComponent implements OnDestroy {

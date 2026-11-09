@@ -3,12 +3,13 @@ import {
   asyncScheduler,
   BehaviorSubject,
   combineLatest,
+  defer,
+  from,
   Observable,
   ObservableInput,
-  ObservedValueOf,
-  throwError,
+  Subscription,
 } from 'rxjs';
-import { catchError, switchMap, tap } from 'rxjs/operators';
+import { finalize } from 'rxjs/operators';
 
 @Injectable({
   providedIn: 'root',
@@ -18,43 +19,40 @@ export class BusyService {
   public isBusy = this._isBusy.asObservable();
   private _thingsBusy = 0;
   private _lastFocus: HTMLElement | null = null;
+  private _delay: Subscription | null = null;
 
-  public busyCombine<O extends ObservableInput<any>>(
-    sources: O[]
-  ): Observable<ObservedValueOf<O>[]> {
-    this.busy();
-    return combineLatest(sources).pipe(
-      tap(() => this.idle()),
-      catchError((err) => {
-        this.idle();
-        return throwError(err);
-      })
-    );
+  public busyCombine<T>(sources: ObservableInput<T>[]): Observable<T[]> {
+    return defer(() => {
+      this.busy();
+      return combineLatest(sources).pipe(finalize(() => this.idle()));
+    });
   }
 
-  public busyStream<O extends ObservableInput<any>>(
-    stream: O
-  ): Observable<ObservedValueOf<O>> {
-    return this.busyCombine([stream]).pipe(switchMap((v) => v));
+  public busyStream<T>(stream: ObservableInput<T>): Observable<T> {
+    return defer(() => {
+      this.busy();
+      return from(stream).pipe(finalize(() => this.idle()));
+    });
   }
 
   public busy() {
-    if (!this._isBusy.value)
-      asyncScheduler.schedule(() => {
-        if (this._thingsBusy > 0) {
-          this.saveCurrentFocus();
-          this._isBusy.next(true);
-        }
-      }, 250);
-    else this._isBusy.next(true);
     this._thingsBusy++;
+    if (this._thingsBusy === 1) {
+      this._delay = asyncScheduler.schedule(() => {
+        this._delay = null;
+        this.saveCurrentFocus();
+        this._isBusy.next(true);
+      }, 250);
+    }
   }
 
   public idle() {
+    if (this._thingsBusy === 0) return;
     this._thingsBusy--;
 
-    if (this._thingsBusy <= 0) {
-      this._thingsBusy = 0;
+    if (this._thingsBusy === 0) {
+      this._delay?.unsubscribe();
+      this._delay = null;
       this._isBusy.next(false);
       this.restoreFocus();
     }
@@ -70,6 +68,7 @@ export class BusyService {
   }
 
   private restoreFocus() {
-    if (this._lastFocus) this._lastFocus.focus();
+    this._lastFocus?.focus();
+    this._lastFocus = null;
   }
 }

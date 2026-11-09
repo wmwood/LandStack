@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { BehaviorSubject } from 'rxjs';
 import { ToDoItemDto } from '../_models/toDoItemDto';
-import { environment } from 'src/environments/environment';
+import { environment } from '../../environments/environment';
 import { switchMap, tap } from 'rxjs/operators';
 import { CreateTodoItemDto } from '../_models/createTodoItemDto';
 import { BusyService } from '../busy/busy.service';
@@ -21,7 +21,10 @@ export class TodoRestService {
     )
   );
 
-  constructor(private http: HttpClient, private busy: BusyService) {}
+  constructor(
+    private http: HttpClient,
+    private busy: BusyService
+  ) {}
 
   public refresh() {
     this._todosChangedAction.next(true);

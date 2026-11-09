@@ -1,18 +1,29 @@
-import { Component, OnDestroy } from '@angular/core';
-import { FormBuilder, FormGroup, Validators } from '@angular/forms';
+import { Component, OnDestroy, ChangeDetectionStrategy } from '@angular/core';
+import {
+  UntypedFormBuilder,
+  UntypedFormGroup,
+  Validators,
+  ReactiveFormsModule,
+} from '@angular/forms';
 import { IAppRoute } from '../routes';
 import { TodoRealtimeService } from './todo-realtime.service';
+import { AsyncPipe } from '@angular/common';
 
 @Component({
   selector: 'app-todo-realtime',
   templateUrl: './todo-realtime.component.html',
   styleUrls: ['./todo-realtime.component.scss'],
+  changeDetection: ChangeDetectionStrategy.Eager,
+  imports: [ReactiveFormsModule, AsyncPipe],
 })
 export class TodoRealtimeComponent implements OnDestroy {
   public todos$ = this.todoService.todos$;
-  public addNewForm: FormGroup;
+  public addNewForm: UntypedFormGroup;
 
-  constructor(private todoService: TodoRealtimeService, fb: FormBuilder) {
+  constructor(
+    private todoService: TodoRealtimeService,
+    fb: UntypedFormBuilder
+  ) {
     this.addNewForm = fb.group({
       description: ['', Validators.required],
     });

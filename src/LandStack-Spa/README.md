@@ -1,27 +1,21 @@
-# LandStackSpa
+# LandStack SPA
 
-This project was generated with [Angular CLI](https://github.com/angular/angular-cli) version 11.0.1.
+The frontend uses Angular 22.2.5, standalone components, SCSS and RxJS. Use Node
+24.22.2 and npm 12.0.2, matching the root `.node-version` and the package manifest.
 
-## Development server
+From this directory:
 
-Run `ng serve` for a dev server. Navigate to `http://localhost:4200/`. The app will automatically reload if you change any of the source files.
+```powershell
+rtk proxy npm ci --no-audit --no-fund
+rtk proxy npm start
+```
 
-## Code scaffolding
+Open `http://localhost:8080`. Run `npm run lint`, `npm test` for watch mode,
+`npm test -- --watch=false` for one-shot Vitest tests, and
+`npm run build -- --configuration production` for assets in
+`dist/LandStack-Spa/browser` (prefix shell invocations with `rtk proxy`).
 
-Run `ng generate component component-name` to generate a new component. You can also use `ng generate directive|pipe|service|class|guard|interface|enum|module`.
-
-## Build
-
-Run `ng build` to build the project. The build artifacts will be stored in the `dist/` directory. Use the `--prod` flag for a production build.
-
-## Running unit tests
-
-Run `ng test` to execute the unit tests via [Karma](https://karma-runner.github.io).
-
-## Running end-to-end tests
-
-Run `ng e2e` to execute the end-to-end tests via [Protractor](http://www.protractortest.org/).
-
-## Further help
-
-To get more help on the Angular CLI use `ng help` or go check out the [Angular CLI Overview and Command Reference](https://angular.io/cli) page.
+The [repository README](../../README.md) owns full setup, mocked component/service
+test examples, CI/container details and disposable API/two-client verification.
+Karma/Jasmine and TSLint have been replaced; the incomplete Protractor setup was
+retired and there is no automated end-to-end command.

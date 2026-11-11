@@ -316,7 +316,7 @@ public sealed class CorrectnessTests
     }
 }
 
-internal sealed class IsolatedApiFactory(string databaseDirectory, TimeProvider timeProvider, Action<IServiceCollection>? configure = null)
+internal sealed class IsolatedApiFactory(string databaseDirectory, TimeProvider timeProvider, Action<IServiceCollection>? configure = null, string environment = "Production")
     : WebApplicationFactory<Program>
 {
     private LiteDbProvider? _database;
@@ -324,7 +324,7 @@ internal sealed class IsolatedApiFactory(string databaseDirectory, TimeProvider 
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
-        builder.UseEnvironment("Production");
+        builder.UseEnvironment(environment);
         builder.ConfigureLogging(logging => logging.ClearProviders());
         builder.ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection(
             new Dictionary<string, string?> { ["LiteDb:DataDirectory"] = databaseDirectory }));

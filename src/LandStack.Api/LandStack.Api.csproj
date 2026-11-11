@@ -1,19 +1,23 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
-    <TargetFramework>net6.0</TargetFramework>
+    <TargetFramework>net11.0</TargetFramework>
+    <Nullable>enable</Nullable>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="LiteDB" Version="5.0.11" />
-    <PackageReference Include="MediatR" Version="10.0.1" />
-    <PackageReference Include="MediatR.Extensions.Microsoft.DependencyInjection" Version="10.0.1" />
-    <PackageReference Include="Microsoft.AspNetCore.Mvc.NewtonsoftJson" Version="6.0.1" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="11.0.0" />
+    <PackageReference Include="LiteDB" Version="5.0.21" />
     <PackageReference Include="MTT" Version="0.7.2" />
   </ItemGroup>
 
-   <Target Name="Convert" BeforeTargets="PrepareForBuild">
-    <ConvertMain WorkingDirectory="./Infrastructure/Dto/" ConvertDirectory="../LandStack-Spa/src/app/_models" />
+  <Target Name="Convert" BeforeTargets="PrepareForBuild">
+    <PropertyGroup>
+      <TypeScriptModelOutputDirectory Condition="'$(TypeScriptModelOutputDirectory)' == '' and Exists('$(MSBuildProjectDirectory)/../LandStack-Spa/src/app/_models')">$(MSBuildProjectDirectory)/../LandStack-Spa/src/app/_models</TypeScriptModelOutputDirectory>
+      <TypeScriptModelOutputDirectory Condition="'$(TypeScriptModelOutputDirectory)' == ''">$([System.IO.Path]::Combine('$(MSBuildProjectDirectory)', '$(IntermediateOutputPath)', 'TypeScriptModels'))</TypeScriptModelOutputDirectory>
+    </PropertyGroup>
+    <MakeDir Directories="$(TypeScriptModelOutputDirectory)" />
+    <ConvertMain WorkingDirectory="$(MSBuildProjectDirectory)/Infrastructure/Dto/" ConvertDirectory="$(TypeScriptModelOutputDirectory)" />
   </Target>
 
 </Project>

@@ -1,7 +1,9 @@
 # The LAND Stack
 
 LAND combines LiteDB, Angular, Nginx and .NET in a to-do application. The SPA has
-REST (`/`) and SignalR (`/realtime`) views backed by the same API operations.
+REST (`/`) and SignalR (`/realtime`) views backed by the same .NET 11 API
+operations through a local typed dispatcher. The backend retains LiteDB data
+and existing REST/hub contracts alongside the Angular 22 frontend.
 
 ## Supported frontend setup
 
@@ -28,10 +30,42 @@ the API's allowed browser origin. The SPA uses Angular 22.2.5, standalone
 components, the application builder, SCSS and RxJS. Application change detection
 remains Zone.js based.
 
-The API targets .NET 6 and needs its runtime plus a compatible SDK. From
-`src/LandStack.Api`, run `rtk proxy dotnet run` for ordinary development on port
-5000. This uses that checkout's `App_Data/database.db`; use the disposable setup
-below for verification that creates or deletes items.
+## Backend setup
+
+Use the stable .NET SDK selected by `global.json`, which allows servicing patches
+within its feature band and selects the native Microsoft Testing Platform runner.
+From `src/LandStack.Api`, run `rtk proxy dotnet run` for Development on port 5000.
+The default data file is that content root's `App_Data/database.db`; use the
+disposable setup below when creating or deleting verification items.
+
+## Endpoints and behavior
+
+- `/todoItem`: list and create; `/todoItem/toggleComplete/{id}`: toggle;
+  `/todoItem/{id}`: delete. Successful routes, methods and item fields are retained.
+- `/todohub`: `GetAllItems`, `Create`, `ToggleComplete`, `Delete`, with existing
+  `itemCreated`, `itemUpdated`, `itemDeleted` event names and payloads.
+- `/openapi/v1.json`: built-in OpenAPI document, available only in Development.
+- `/health`: minimal liveness returning `Healthy`. It does not open or validate
+  the database. Verify `/todoItem` separately when checking storage readiness.
+
+Both transports reject null/empty/whitespace descriptions and preserve valid
+text as supplied. A missing toggle returns REST 404 or a safe hub error; an
+absent delete succeeds without an event. REST failures use Problem Details;
+unexpected HTTP/hub failures expose generic messages while server logs retain
+diagnostics. New timestamps use TimeProvider UTC; existing stored instants are
+preserved. A failed broadcast after a committed write does not undo that write.
+
+## Database configuration
+
+The default is `<API content root>/App_Data/database.db`, collection `ToDoItem`.
+Set `LiteDb:DataDirectory` in configuration, or environment variable
+`LiteDb__DataDirectory`, to use another directory. Relative paths resolve under
+the content root. Use a fresh external directory for manual verification and
+never point tests at application data. Backend tests create disposable copies.
+
+C# DTOs remain the source of tracked TypeScript contracts. Build the API before
+the SPA; see [contract generation](tools/contract-generation/README.md) when
+changing DTO nullability or API-only build behavior.
 
 ## Frontend checks
 
@@ -54,7 +88,7 @@ ESLint checks handwritten TypeScript and Angular templates. Generated DTOs under
 `src/app/_models` are excluded from handwritten-code lint rules; their C# sources
 and API build generation remain authoritative. Karma/Jasmine and TSLint were
 replaced. The incomplete Protractor setup and `e2e` command were retired; there is
-no automated end-to-end suite.
+no automated browser end-to-end suite.
 
 ### Adding tests
 
@@ -109,15 +143,16 @@ Assert rejection and cancellation behavior as well as successful operations.
 [Frontend CI](.github/workflows/frontend.yml) runs on pushes and pull requests.
 It selects `.node-version`, installs pinned npm, caches from the SPA lockfile,
 and runs clean install, lint, one-shot tests and a production build on Ubuntu.
-It needs no backend or secrets. Local execution of these commands and workflow
-inspection are recorded; a hosted run remains unverified until an authorized
-push is observed.
+It needs no backend or secrets. Report hosted workflow execution only after
+observing an actual run; local checks do not establish hosted results.
 
 From the repository root:
 
 ```powershell
 rtk proxy docker compose config --quiet
 rtk proxy docker build -f src/.docker/_spa.dockerfile -t landstack-spa:local src
+rtk proxy docker compose build --pull api
+rtk proxy docker compose up api
 ```
 
 The SPA Docker build uses Node 24.22.2, npm 12.0.2 and `npm ci`, with no OpenSSL
@@ -128,11 +163,18 @@ root. Nginx falls back to `index.html` for `/realtime` and other client routes.
 It does not proxy API or hub traffic. Production SPA URLs point directly to
 `http://localhost:8181`; Compose publishes SPA 8080 and API 8181.
 
+The API image uses stable .NET 11 SDK/runtime patch tags, runs as non-root UID
+1654 and listens on internal 8080 with host port 8181. The named `appdata` volume
+mounts at `/app/App_Data`; a new empty volume inherits the image directory's
+ownership. Existing volumes are never automatically chowned at startup.
+Use `rtk proxy docker compose up --build` to start both services. Update API
+Dockerfile tags and `global.json` deliberately for servicing releases, rerun
+checks and record resolved image digests; `--pull` fetches the selected tags.
+
 ## Disposable manual verification
 
 Run this only from a managed checkout when using the feature workflow. Record
-its exact commit and use a new external directory for each run. The API sets its
-LiteDB directory from `ContentRootPath`, so an explicit content root isolates
+its exact commit and use a new external directory for each run. Set an explicit external data directory and content root to isolate
 `App_Data/database.db` without changing application code or production data.
 
 From `src/LandStack.Api`, build with `rtk proxy dotnet build -c Release`. Review
@@ -142,8 +184,9 @@ any generated DTO diff. Then, from the repository root in PowerShell:
 $repoRoot = (Get-Location).Path
 $smokeRoot = Join-Path $env:TEMP ('landstack-smoke-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $smokeRoot
-$apiDll = Join-Path $repoRoot 'src/LandStack.Api/bin/Release/net6.0/LandStack.Api.dll'
+$apiDll = Join-Path $repoRoot 'src/LandStack.Api/bin/Release/net11.0/LandStack.Api.dll'
 $env:ASPNETCORE_ENVIRONMENT = 'Development'
+$env:LiteDb__DataDirectory = Join-Path $smokeRoot 'App_Data'
 rtk proxy dotnet $apiDll --contentRoot $smokeRoot --urls http://localhost:5000
 ```
 
@@ -174,25 +217,72 @@ Keep the disposable data and evidence until the owning workflow authorizes
 cleanup. Never substitute a persistent Compose volume or an existing application
 database to make these checks pass.
 
-## Verification handoff
+## Upgrade, backup and rollback
 
-The upgrade's external feature workspace contains `state.json`, immutable
-specifications and `reports/`. Task reports record sequential official Angular
-14–22 migrations, clean installation, 49 mocked regression tests, production
-builds, meaningful lint/failure probes, and separately built SPA images with HTTP
-asset/deep-link checks. Independent task reviews repeat relevant checks. Evidence files include
-`01-foundation-attempt1.json`, `02-rest-busy-attempt1.json`,
-`03-realtime-routing-attempt1.json`, `04-lint-ci-attempt1.json`,
-`05-packaging-attempt1.json` and `05-http-serving.json` under that external
-`reports/` directory.
+Before upgrading an existing deployment:
 
-At this documentation task, final exact-commit browser checks against the real
-API, two-client broadcast acceptance and feature-wide validation/quality gates
-remain pending. Mocked tests and HTTP serving checks alone do not certify those
-requirements. Preserve each validator report beside the other external evidence.
+1. Record the current API container, image ID, internal port and exact named
+   volume using `docker compose ps -a api` and `docker inspect <api-container>`.
+   Check the mount destination is `/app/App_Data` and identify its actual source;
+   Compose project names can change the physical volume name.
+2. Stop the API with `rtk proxy docker compose stop api`. Copy the **entire**
+   data directory, including any log files, to a new external backup directory:
+   `rtk proxy docker cp <api-container>:/app/App_Data/. <absolute-new-backup-directory>`.
+   Keep that consistent stopped-data backup and the previous image.
+3. Inspect existing data ownership before starting the non-root image. With the
+   API stopped, an owner may explicitly repair the verified volume using a
+   uniquely named helper and the runtime UID reported by
+   `docker image inspect landstack-api --format '{{.Config.User}}'`. For the
+   current image, the narrowly scoped helper command is:
 
-Known separately scoped findings remain: .NET 6 is out of support (`NETSDK1138`),
-LiteDB 5.0.11 reports `NU1904` for GHSA-3x49-g6rc-c284, and Compose warns about its
-obsolete `version` field. npm 12 can report blocked dependency install scripts;
-the observed local and image builds passed with the default policy. A successful
-API build is compilation evidence; no backend test project is tracked.
+   ```text
+   rtk proxy docker run --name <unique-permissions-helper> --user 0:0 --entrypoint chown --mount type=volume,src=<verified-appdata-volume>,dst=/data landstack-api -R 1654:1654 /data
+   ```
+
+   Replace placeholders with inspected identities. This changes only ownership
+   in that selected volume; retain existing file modes. It is an explicit owner
+   operation, not an automatic application migration. Host bind mounts may need
+   host-specific ownership handling instead of the named-volume procedure.
+4. Start the upgraded API, verify `/health`, then list/create/toggle/delete via
+   `/todoItem` and check realtime events. Restart and confirm persistence before
+   declaring the upgrade successful. Keep backups and previous images.
+
+For rollback, stop the upgraded API and restore the pre-upgrade directory into
+a **separate** volume, then start the recorded previous image with that restored
+copy and its recorded internal port. New-engine writes may prevent an older
+engine from reading current files; use the pre-upgrade backup in that case.
+Verify records and mutations before switching traffic back. Keep the current
+volume intact for investigation, and run only one writer against a data file.
+
+
+## Backend verification
+
+Build from `src/LandStack.Api` with `rtk proxy dotnet build -c Release`, then run
+from the repository root:
+
+```powershell
+rtk proxy dotnet test --project tests/LandStack.Api.Tests/LandStack.Api.Tests.csproj -c Release
+rtk proxy dotnet list src/LandStack.Api/LandStack.Api.csproj package --include-transitive --vulnerable
+$compatibilityOutput = Join-Path $env:TEMP 'LandStack-compatibility'
+rtk proxy node tests/compatibility/signalr-client.cjs --output-root $compatibilityOutput
+rtk proxy docker compose config --quiet
+rtk git diff --check
+```
+
+Run the real-client command after installing the SPA lockfile with its pinned
+Node/npm toolchain. It uses the actual locked SignalR package, two WebSocket
+clients and isolated API/data processes; see
+[compatibility verification](tests/compatibility/README.md) for evidence and
+lifecycle details. Backend tests cover dispatcher behavior, copied old databases,
+HTTP/hub errors, UTC/serialization and operational endpoints. Review advisory
+output as well as command exit codes. Frontend lint/Vitest/build checks above
+remain required; mocked tests do not replace real-client/browser verification.
+Packaging also requires an actual affected-image build/start and data persistence
+checks. Independent feature validation and quality reviews bind exact commits.
+
+Initialization's .NET 6 NETSDK1138, LiteDB 5.0.11 NU1904
+(GHSA-3x49-g6rc-c284) and obsolete Compose version findings are historical;
+the .NET 11/LiteDB 5.0.21 backend and updated Compose resolve those shipping
+findings. Excluded manual legacy fixture generators retain old-version
+provenance only. npm 12 may report blocked install scripts; keep the default
+policy and investigate actual failures rather than silently weakening it.

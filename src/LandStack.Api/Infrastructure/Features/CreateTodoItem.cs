@@ -1,18 +1,19 @@
+using System;
 using System.Threading;
 using System.Threading.Tasks;
 using LandStack.Api.Infrastructure.Data.Models;
 using LandStack.Api.Infrastructure.Dto;
 using LandStack.Api.Infrastructure.Services;
 using LiteDB;
-using MediatR;
+using LandStack.Api.Infrastructure.Dispatcher;
 
 namespace LandStack.Api.Infrastructure.Features
 {
     public record CreateTodoItemRequest : IRequest<ToDoItemDto>
     {
-        public string Description { get; init; }
+        public string? Description { get; init; }
 
-        public static CreateTodoItemRequest Make(string description)
+        public static CreateTodoItemRequest Make(string? description)
         {
             return new CreateTodoItemRequest
             {
@@ -23,20 +24,23 @@ namespace LandStack.Api.Infrastructure.Features
 
     public class CreateTodoItem : IRequestHandler<CreateTodoItemRequest, ToDoItemDto>
     {
-        private readonly IClock _clock;
+        private readonly TimeProvider _timeProvider;
         private readonly ILiteCollection<ToDoItem> _items;
-        private readonly IMediator _mediator;
+        private readonly IDispatcher _dispatcher;
 
-        public CreateTodoItem(LiteDbProvider dbProvider, IClock clock, IMediator mediator)
+        public CreateTodoItem(LiteDbProvider dbProvider, TimeProvider timeProvider, IDispatcher dispatcher)
         {
             _items = dbProvider.Database.GetCollection<ToDoItem>(nameof(ToDoItem));
-            _clock = clock;
-            _mediator = mediator;
+            _timeProvider = timeProvider;
+            _dispatcher = dispatcher;
         }
 
-        public Task<ToDoItemDto> Handle(CreateTodoItemRequest request, CancellationToken cancellationToken)
+        public async Task<ToDoItemDto> Handle(CreateTodoItemRequest request, CancellationToken cancellationToken)
         {
-            var item = new ToDoItem(request.Description, _clock.Now);
+            cancellationToken.ThrowIfCancellationRequested();
+            if (string.IsNullOrWhiteSpace(request.Description))
+                throw new TodoValidationException();
+            var item = new ToDoItem(request.Description, _timeProvider.GetUtcNow().UtcDateTime);
 
             _items.Insert(item);
 
@@ -48,9 +52,9 @@ namespace LandStack.Api.Infrastructure.Features
                 CreatedDate = item.CreatedDate
             };
 
-            _mediator.Publish(TodoNotification.Make(NotificationAction.ItemCreated, createdItem));
+            await _dispatcher.Notify(TodoNotification.Make(NotificationAction.ItemCreated, createdItem), cancellationToken);
 
-            return Task.FromResult(createdItem);
+            return createdItem;
         }
     }
 }

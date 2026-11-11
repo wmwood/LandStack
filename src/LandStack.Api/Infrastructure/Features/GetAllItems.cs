@@ -5,7 +5,7 @@ using LandStack.Api.Infrastructure.Data.Models;
 using LandStack.Api.Infrastructure.Dto;
 using LandStack.Api.Infrastructure.Services;
 using LiteDB;
-using MediatR;
+using LandStack.Api.Infrastructure.Dispatcher;
 
 namespace LandStack.Api.Infrastructure.Features
 {
@@ -25,6 +25,7 @@ namespace LandStack.Api.Infrastructure.Features
 
         public Task<List<ToDoItemDto>> Handle(GetAllItemsRequest request, CancellationToken cancellationToken)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             return Task.FromResult(_items.Query().OrderBy(i => i.CreatedDate).Select(item => new ToDoItemDto
             {
                 ToDoItemId = item.ToDoItemId,

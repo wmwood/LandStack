@@ -1,26 +1,31 @@
+using System;
 using System.Threading;
 using System.Threading.Tasks;
+using LandStack.Api.Infrastructure.Dispatcher;
 using LandStack.Api.Infrastructure.Extensions;
 using LandStack.Api.Infrastructure.Features;
-using MediatR;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.Logging;
 
-namespace LandStack.Api.Hubs
+namespace LandStack.Api.Hubs;
+
+public sealed class NotificationHandler(IHubContext<ToDoHub> hub, ILogger<NotificationHandler> logger)
+    : INotificationHandler<TodoNotification>
 {
-    public class NotificationHandler : INotificationHandler<TodoNotification>
+    public async Task Handle(TodoNotification notification, CancellationToken cancellationToken)
     {
-        private readonly IMediator _mediator;
-        private readonly IHubContext<ToDoHub> _hub;
-
-        public NotificationHandler(IMediator mediator, IHubContext<ToDoHub> hub)
+        try
         {
-            _mediator = mediator;
-            _hub = hub;
+            await hub.Clients.All.SendAsync(notification.Action.ToCamelCaseString(), notification.Data, cancellationToken);
         }
-
-        public async Task Handle(TodoNotification notification, CancellationToken cancellationToken)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            await _hub.Clients.All.SendAsync(notification.Action.ToCamelCaseString(), notification.Data);
+            throw;
+        }
+        catch (Exception exception)
+        {
+            logger.LogError(exception, "Failed to broadcast to-do event {Action} after persistence. The write was not rolled back.", notification.Action);
+            throw;
         }
     }
 }

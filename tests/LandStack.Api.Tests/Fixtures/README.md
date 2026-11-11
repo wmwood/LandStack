@@ -35,3 +35,25 @@ stored text. The approved modernization separately preserves newly supplied
 valid text by configuring a provider-local mapper, without rewriting old data.
 Tests copy this immutable fixture to a unique temporary directory, mutate only
 the copy, and reopen it to verify both old fields and new writes persist.
+
+## Historical unspecified-kind clock fixture
+
+`legacy-unspecified-5.0.11.db` is a second independent synthetic fixture made
+with actual LiteDB 5.0.11 and the baseline clock pattern
+`new DateTime(utcDateTime.Ticks)`. Its companion `.db.json` records the source
+unspecified timestamp, originating local time zone, actual stored UTC instant,
+assembly version and SHA256. `GenerateUnspecifiedLegacyFixture.cs` is the
+manual reproduction source, excluded from automated test compilation.
+
+This fixture intentionally records `2021-02-05T12:30:45` as the actual persisted
+instant `2021-02-05T19:30:45Z` in the originating US Mountain Standard Time zone.
+The regression tests preserve that stored instant through REST, hub, toggle
+and restart, independently of the machine timezone now running the tests.
+They do not retrospectively fix or rewrite historical timestamps. Newly created
+items use TimeProvider UTC and avoid this old unspecified-kind ambiguity.
+
+SHA256: `e09238649478e7f22b663526bfde937a43bbe523753855ff08b7aaa74f2484ac`.
+As with the first fixture, the vulnerable old library is manual-generation-only;
+shipping application and automated tests do not reference it. The generator
+uses Utf8JsonWriter for metadata so it also works with .NET 11 file-app defaults
+that disable reflection-based System.Text.Json serialization.

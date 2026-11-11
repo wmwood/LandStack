@@ -8,11 +8,14 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="11.0.0" />
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="11.0.0" />
     <PackageReference Include="xunit.v3" Version="4.0.3" />
     <ProjectReference Include="../../src/LandStack.Api/LandStack.Api.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Compile Remove="Fixtures/**/*.cs" />
-    <None Update="Fixtures/legacy-5.0.11.db" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="Fixtures/*.db" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="Fixtures/*.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

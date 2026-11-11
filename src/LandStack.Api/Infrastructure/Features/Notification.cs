@@ -6,7 +6,7 @@ namespace LandStack.Api.Infrastructure.Features
     public record TodoNotification : INotification
     {
         public NotificationAction Action { get; init; }
-        public object Data { get; init; }
+        public required object Data { get; init; }
 
         public static TodoNotification Make(NotificationAction action, object data)
         {

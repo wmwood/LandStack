@@ -5,9 +5,11 @@ using LandStack.Api.Infrastructure.Services;
 using LandStack.Api.Infrastructure.Dispatcher;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.FileProviders;
+using Microsoft.Extensions.Hosting;
 using Xunit;
 
-// The baseline provider reads process-wide DataDirectory. Task 03 replaces this seam.
+// Database instances are isolated; serial execution also keeps fault-injection tests deterministic.
 [assembly: Xunit.v3.Parallelization(Mode = Xunit.Sdk.ParallelMode.None)]
 
 namespace LandStack.Api.Tests;
@@ -19,7 +21,7 @@ public sealed class PersistenceRegressionTests
     {
         using var database = new IsolatedDatabase();
         var now = new DateTime(2026, 11, 11, 12, 34, 56, DateTimeKind.Utc);
-        var clock = new TestClock { Now = now };
+        var clock = new TestTimeProvider { UtcNow = now };
         using var services = database.OpenServices(clock);
         var dispatcher = services.GetRequiredService<IDispatcher>();
         var notifications = services.GetRequiredService<RecordedNotifications>();
@@ -60,7 +62,7 @@ public sealed class PersistenceRegressionTests
         var lateDate = new DateTime(2021, 2, 4, 12, 30, 45, DateTimeKind.Utc);
         var newDate = new DateTime(2026, 11, 11, 12, 34, 56, DateTimeKind.Utc);
         Guid newId;
-        using (var services = database.OpenServices(new TestClock { Now = newDate }))
+        using (var services = database.OpenServices(new TestTimeProvider { UtcNow = newDate }))
         {
             var dispatcher = services.GetRequiredService<IDispatcher>();
             var existing = await dispatcher.Execute(GetAllItemsRequest.Make(), TestContext.Current.CancellationToken);
@@ -75,7 +77,7 @@ public sealed class PersistenceRegressionTests
             newId = (await dispatcher.Execute(CreateTodoItemRequest.Make("New after upgrade"), TestContext.Current.CancellationToken)).ToDoItemId;
         }
 
-        using (var services = database.OpenServices(new TestClock { Now = newDate }))
+        using (var services = database.OpenServices(new TestTimeProvider { UtcNow = newDate }))
         {
             var dispatcher = services.GetRequiredService<IDispatcher>();
             var restored = await dispatcher.Execute(GetAllItemsRequest.Make(), TestContext.Current.CancellationToken);
@@ -89,7 +91,7 @@ public sealed class PersistenceRegressionTests
             await dispatcher.Execute(DeleteTodoItemRequest.Make(lateId), TestContext.Current.CancellationToken);
         }
 
-        using (var services = database.OpenServices(new TestClock { Now = newDate }))
+        using (var services = database.OpenServices(new TestTimeProvider { UtcNow = newDate }))
         {
             var restored = await services.GetRequiredService<IDispatcher>().Execute(GetAllItemsRequest.Make(), TestContext.Current.CancellationToken);
             Assert.Equal(new[] { earlyId, newId }, restored.Select(i => i.ToDoItemId));
@@ -98,9 +100,10 @@ public sealed class PersistenceRegressionTests
     }
 }
 
-internal sealed class TestClock : IClock
+internal sealed class TestTimeProvider : TimeProvider
 {
-    public DateTime Now { get; set; }
+    public DateTimeOffset UtcNow { get; set; }
+    public override DateTimeOffset GetUtcNow() => UtcNow;
 }
 
 internal sealed class RecordedNotifications : INotificationHandler<TodoNotification>
@@ -118,25 +121,27 @@ internal sealed class RecordedNotifications : INotificationHandler<TodoNotificat
 
 internal sealed class IsolatedDatabase : IDisposable
 {
-    private readonly object? _previousDataDirectory = AppDomain.CurrentDomain.GetData("DataDirectory");
     private readonly string _directory = Path.Combine(Path.GetTempPath(), "LandStack.Api.Tests", Guid.NewGuid().ToString("N"));
+
+    public string DirectoryPath => _directory;
 
     public IsolatedDatabase(string? fixture = null)
     {
         Directory.CreateDirectory(_directory);
         if (fixture is not null)
             File.Copy(Path.Combine(AppContext.BaseDirectory, "Fixtures", fixture), Path.Combine(_directory, "database.db"));
-        AppDomain.CurrentDomain.SetData("DataDirectory", _directory);
     }
 
-    public ServiceProvider OpenServices(IClock clock, Action<IServiceCollection>? configure = null)
+    public ServiceProvider OpenServices(TimeProvider timeProvider, Action<IServiceCollection>? configure = null)
     {
         var services = new ServiceCollection();
         services.AddTodoDispatcher();
         services.RemoveAll<INotificationHandler<TodoNotification>>();
         services.AddSingleton<RecordedNotifications>();
         services.AddSingleton<INotificationHandler<TodoNotification>>(p => p.GetRequiredService<RecordedNotifications>());
-        services.AddSingleton(clock);
+        services.AddSingleton(timeProvider);
+        services.AddSingleton<IHostEnvironment>(new TestHostEnvironment(_directory));
+        services.Configure<LiteDbOptions>(options => options.DataDirectory = _directory);
         services.AddSingleton<LiteDbProvider>();
         configure?.Invoke(services);
         return services.BuildServiceProvider();
@@ -144,7 +149,14 @@ internal sealed class IsolatedDatabase : IDisposable
 
     public void Dispose()
     {
-        AppDomain.CurrentDomain.SetData("DataDirectory", _previousDataDirectory);
         Directory.Delete(_directory, recursive: true);
     }
+}
+
+internal sealed class TestHostEnvironment(string root) : IHostEnvironment
+{
+    public string EnvironmentName { get; set; } = Environments.Production;
+    public string ApplicationName { get; set; } = typeof(Program).Assembly.GetName().Name!;
+    public string ContentRootPath { get; set; } = root;
+    public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
 }

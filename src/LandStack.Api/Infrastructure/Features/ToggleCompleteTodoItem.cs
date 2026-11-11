@@ -33,7 +33,7 @@ namespace LandStack.Api.Infrastructure.Features
         public async Task Handle(ToggleCompleteTodoItemRequest request, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var item = _items.FindById(request.ToDoItemId);
+            var item = _items.FindById(request.ToDoItemId) ?? throw new TodoItemNotFoundException();
 
             var updatedItem = item with
             {

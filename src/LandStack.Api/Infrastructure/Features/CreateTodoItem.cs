@@ -1,3 +1,4 @@
+using System;
 using System.Threading;
 using System.Threading.Tasks;
 using LandStack.Api.Infrastructure.Data.Models;
@@ -10,9 +11,9 @@ namespace LandStack.Api.Infrastructure.Features
 {
     public record CreateTodoItemRequest : IRequest<ToDoItemDto>
     {
-        public string Description { get; init; }
+        public string? Description { get; init; }
 
-        public static CreateTodoItemRequest Make(string description)
+        public static CreateTodoItemRequest Make(string? description)
         {
             return new CreateTodoItemRequest
             {
@@ -23,21 +24,23 @@ namespace LandStack.Api.Infrastructure.Features
 
     public class CreateTodoItem : IRequestHandler<CreateTodoItemRequest, ToDoItemDto>
     {
-        private readonly IClock _clock;
+        private readonly TimeProvider _timeProvider;
         private readonly ILiteCollection<ToDoItem> _items;
         private readonly IDispatcher _dispatcher;
 
-        public CreateTodoItem(LiteDbProvider dbProvider, IClock clock, IDispatcher dispatcher)
+        public CreateTodoItem(LiteDbProvider dbProvider, TimeProvider timeProvider, IDispatcher dispatcher)
         {
             _items = dbProvider.Database.GetCollection<ToDoItem>(nameof(ToDoItem));
-            _clock = clock;
+            _timeProvider = timeProvider;
             _dispatcher = dispatcher;
         }
 
         public async Task<ToDoItemDto> Handle(CreateTodoItemRequest request, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var item = new ToDoItem(request.Description, _clock.Now);
+            if (string.IsNullOrWhiteSpace(request.Description))
+                throw new TodoValidationException();
+            var item = new ToDoItem(request.Description, _timeProvider.GetUtcNow().UtcDateTime);
 
             _items.Insert(item);
 

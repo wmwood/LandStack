@@ -33,7 +33,8 @@ namespace LandStack.Api.Infrastructure.Features
         public async Task Handle(DeleteTodoItemRequest request, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            _items.Delete(request.ToDoItemId);
+            if (!_items.Delete(request.ToDoItemId))
+                return;
             await _dispatcher.Notify(TodoNotification.Make(NotificationAction.ItemDeleted, request.ToDoItemId), cancellationToken);
         }
     }

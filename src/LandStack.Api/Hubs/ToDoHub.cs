@@ -22,9 +22,9 @@ namespace LandStack.Api.Hubs
             return await _dispatcher.Execute(GetAllItemsRequest.Make(), Context.ConnectionAborted);
         }
 
-        public async Task Create(CreateTodoItemDto dto)
+        public async Task Create(CreateTodoItemDto? dto)
         {
-            await _dispatcher.Execute(CreateTodoItemRequest.Make(dto.Description), Context.ConnectionAborted);
+            await _dispatcher.Execute(CreateTodoItemRequest.Make(dto?.Description), Context.ConnectionAborted);
         }
 
         public async Task ToggleComplete(Guid todoItemId)

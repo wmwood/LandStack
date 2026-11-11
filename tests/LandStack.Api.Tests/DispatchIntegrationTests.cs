@@ -23,7 +23,7 @@ public sealed class DispatchIntegrationTests
     public async Task Controller_and_hub_share_handlers_preserve_success_results_and_forward_transport_tokens()
     {
         using var database = new IsolatedDatabase();
-        using var services = database.OpenServices(new TestClock { Now = DateTime.UtcNow });
+        using var services = database.OpenServices(new TestTimeProvider { UtcNow = DateTime.UtcNow });
         var dispatcher = services.GetRequiredService<IDispatcher>();
         var token = TestContext.Current.CancellationToken;
         var context = new DefaultHttpContext();
@@ -64,7 +64,7 @@ public sealed class DispatchIntegrationTests
     {
         using var database = new IsolatedDatabase();
         var notifications = new BlockingNotification();
-        using var services = database.OpenServices(new TestClock { Now = DateTime.UtcNow }, s =>
+        using var services = database.OpenServices(new TestTimeProvider { UtcNow = DateTime.UtcNow }, s =>
         {
             s.RemoveAll<INotificationHandler<TodoNotification>>();
             s.AddSingleton<INotificationHandler<TodoNotification>>(notifications);

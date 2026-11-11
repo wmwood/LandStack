@@ -6,6 +6,7 @@ using LandStack.Api.Infrastructure.Extensions;
 using LandStack.Api.Infrastructure.Features;
 using LandStack.Api.Infrastructure.Dispatcher;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 
 namespace LandStack.Api.Controllers
 {
@@ -27,9 +28,9 @@ namespace LandStack.Api.Controllers
         }
 
         [HttpPost]
-        public async Task<IActionResult> Post([FromBody] CreateTodoItemDto dto, CancellationToken cancellationToken)
+        public async Task<IActionResult> Post([FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)] CreateTodoItemDto? dto, CancellationToken cancellationToken)
         {
-            var createdItem = await _dispatcher.Execute(CreateTodoItemRequest.Make(dto.Description), cancellationToken);
+            var createdItem = await _dispatcher.Execute(CreateTodoItemRequest.Make(dto?.Description), cancellationToken);
             return base.Created(this.GetResourceUrl(createdItem.ToDoItemId), createdItem);
         }
 

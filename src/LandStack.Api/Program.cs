@@ -1,13 +1,12 @@
 using System;
-using System.IO;
+using System.Text.Json.Serialization;
 using LandStack.Api.Hubs;
+using LandStack.Api.Infrastructure.Dispatcher;
 using LandStack.Api.Infrastructure.Services;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Converters;
-using LandStack.Api.Infrastructure.Dispatcher;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -21,39 +20,35 @@ builder.Services.AddCors(options =>
         .SetPreflightMaxAge(TimeSpan.FromMinutes(10)));
 });
 
-builder.Services.AddControllers().AddNewtonsoftJson(options =>
+builder.Services.AddControllers().AddJsonOptions(options =>
 {
-    options.SerializerSettings.Converters.Add(new StringEnumConverter());
-    options.SerializerSettings.NullValueHandling = NullValueHandling.Ignore;
-    options.SerializerSettings.DateTimeZoneHandling = DateTimeZoneHandling.Utc;
+    options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+    options.JsonSerializerOptions.Converters.Add(new UtcDateTimeJsonConverter());
+    options.JsonSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
 });
 
-builder.Services.AddSignalR();
+builder.Services.AddProblemDetails();
+builder.Services.AddExceptionHandler<TodoExceptionHandler>();
+builder.Services.AddSignalR(options =>
+{
+    options.EnableDetailedErrors = false;
+    options.AddFilter<TodoHubFilter>();
+});
 builder.Services.AddTodoDispatcher();
-builder.Services.AddSingleton<IClock, Clock>();
-builder.Services.AddSingleton<LiteDbProvider, LiteDbProvider>();
+builder.Services.AddSingleton<TimeProvider>(TimeProvider.System);
+builder.Services.Configure<LiteDbOptions>(builder.Configuration.GetSection("LiteDb"));
+builder.Services.AddSingleton<LiteDbProvider>();
 
 var app = builder.Build();
-
-// Configure the HTTP request pipeline.
+app.UseExceptionHandler();
 if (!app.Environment.IsDevelopment())
-{
-    app.UseExceptionHandler("/Error");
-// The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
     app.UseHsts();
-}
-
-AppDomain.CurrentDomain.SetData("DataDirectory", Path.Combine(builder.Environment.ContentRootPath, "App_Data"));
-
-app.UseCors();
 
 app.UseRouting();
-
-app.UseEndpoints(endpoints =>
-{
-    endpoints.MapControllers();
-    endpoints.MapHub<ToDoHub>("/todohub");
-});
-
-
+app.UseCors();
+app.MapControllers();
+app.MapHub<ToDoHub>("/todohub");
 app.Run();
+
+// Public entry point for isolated application-host regression tests.
+public partial class Program { }

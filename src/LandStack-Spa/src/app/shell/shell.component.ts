@@ -1,13 +1,23 @@
-import { Component } from '@angular/core';
-import { Router, NavigationEnd, ActivatedRoute, Route } from '@angular/router';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
+import {
+  Router,
+  NavigationEnd,
+  ActivatedRoute,
+  RouterLinkActive,
+  RouterLink,
+  RouterOutlet,
+} from '@angular/router';
 import { BehaviorSubject } from 'rxjs';
 import { filter, map } from 'rxjs/operators';
 import { IAppRoute } from '../routes';
+import { AsyncPipe } from '@angular/common';
 
 @Component({
   selector: 'app-shell',
   templateUrl: './shell.component.html',
   styleUrls: ['./shell.component.scss'],
+  changeDetection: ChangeDetectionStrategy.Eager,
+  imports: [RouterLinkActive, RouterLink, RouterOutlet, AsyncPipe],
 })
 export class ShellComponent {
   private _navItems$ = new BehaviorSubject<IAppRoute[]>([]);
@@ -21,9 +31,12 @@ export class ShellComponent {
     map(() => this._route.snapshot.firstChild)
   );
 
-  constructor(private _router: Router, private _route: ActivatedRoute) {
+  constructor(
+    private _router: Router,
+    private _route: ActivatedRoute
+  ) {
     _router.config.forEach((r) => {
-      if (!!r.children) {
+      if (r.children) {
         this._navItems$.next(
           <IAppRoute[]>r.children.filter((c) => !!c.data?.title)
         );

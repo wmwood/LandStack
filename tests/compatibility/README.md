@@ -20,11 +20,13 @@ and restarting its API process. Clients fetch the initial list after restart.
 Client warning/error logs must be empty. The test removes its synthetic records
 through API calls but retains the disposable database and evidence files.
 
-SignalR 5 predates Node's native global `fetch` and assumes browser `self` when
-it sees that global. The runner disables global fetch only within its own Node
-process so the unchanged package uses its already-locked Node HTTP/cookie/abort
-polyfills. REST probes use Node's native HTTP module. No application/browser
-code, package source, lockfile or production transport configuration is changed.
+Current locked clients run with the normal pinned Node environment, including
+native global fetch. Only when checking a legacy SignalR 5 package does the
+runner disable its test-process global fetch: that older client assumes browser
+`self` and otherwise cannot select its shipped Node HTTP/cookie/abort polyfills.
+REST probes use Node's native HTTP module. All hub invocations have explicit
+time bounds. No application/browser code, package source, lockfile or production
+transport configuration is changed.
 
 Each run creates a unique directory under the absolute external `--output-root`
 and refuses output within any repository worktree. `result.json` records the

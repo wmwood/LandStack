@@ -34,7 +34,9 @@ cross-language contracts.
   the API directory, then inspect generated diffs instead of hand-editing models.
   For DTO nullability or API-only output changes, read
   [contract generation](tools/contract-generation/README.md).
-- `src/LandStack-Spa`: Angular 13 with strict TypeScript, RxJS services and SCSS.
+- `src/LandStack-Spa`: Angular 22 with standalone components, strict TypeScript,
+  RxJS services and SCSS. Application runtime retains Zone.js; Vitest TestBed uses
+  zoneless change detection in the separate testing configuration.
   Follow its `.editorconfig`. `todo-rest` uses HTTP and reloads after mutations;
   `todo-realtime` maintains a list from SignalR messages. Both use `BusyService`.
 - Keep REST routes, hub method names and notification names coordinated with
@@ -48,62 +50,67 @@ cross-language contracts.
 
 ## Setup, builds and checks
 
-Run each command from the directory shown. Use `rtk proxy` for tools not covered
-by an RTK filter. There is no root solution, root `package.json` or CI workflow.
+Use the Node release in `.node-version` and npm recorded in the SPA
+`packageManager`. For initial setup or test authoring, read [README.md](README.md).
+Use the stable .NET SDK selected by `global.json`, including its native MTP test
+runner. Run each command from the directory shown. Use `rtk proxy` for tools not covered
+by an RTK filter. There is no root solution or root `package.json`.
 
 | Directory | Command | Purpose |
 | --- | --- | --- |
 | `src/LandStack.Api` | `rtk proxy dotnet build -c Release` | Restore, generate SPA models and compile API. |
-| Repository root | `rtk proxy dotnet test --project tests/LandStack.Api.Tests/LandStack.Api.Tests.csproj -c Release` | Run backend tests with the native MTP runner selected in `global.json`. |
-| Repository root | `rtk proxy dotnet list src/LandStack.Api/LandStack.Api.csproj package --include-transitive --vulnerable` | Review direct/transitive backend advisory findings, not just exit status. |
+| Repository root | `rtk proxy dotnet test --project tests/LandStack.Api.Tests/LandStack.Api.Tests.csproj -c Release` | Run isolated backend behavioral tests. |
+| Repository root | `rtk proxy dotnet list src/LandStack.Api/LandStack.Api.csproj package --include-transitive --vulnerable` | Review advisory findings, not just exit status. |
 | `src/LandStack-Spa` | `rtk proxy npm ci --no-audit --no-fund` | Install dependencies from the committed lockfile. |
-| `src/LandStack-Spa` | `rtk proxy npm run build -- --configuration production` | Compile production SPA and check configured size budgets. |
+| `src/LandStack-Spa` | `rtk proxy npm run lint` | ESLint handwritten TypeScript and templates. |
+| `src/LandStack-Spa` | `rtk proxy npm test -- --watch=false` | Run mocked Vitest/jsdom tests once; failed assertions must fail the command. |
+| `src/LandStack-Spa` | `rtk proxy npm run build -- --configuration production` | Compile production browser assets and enforce size budgets. |
 | Repository root | `rtk proxy docker compose config --quiet` | Validate Compose configuration without starting containers. |
 | Repository root | `rtk git diff --check` | Check patch whitespace. |
 
-Original initialization checks passed on 2026-11-09 with Windows,
-.NET SDK 10.0.403 (the .NET 6 runtime is also installed), Node 26.7.0, npm 12.0.2
-and Docker CLI 29.9.2. This records an observed build, not a supported runtime
-matrix. That baseline had no SDK pin; current `global.json` selects stable
-.NET 11 and servicing patches within its feature band. npm reported blocked dependency install
-scripts; the production build nevertheless passed with the default policy.
-Keep the lockfile and do not silently upgrade dependencies to repair tooling.
-
-Existing check limitations:
-
-- Backend behavioral tests are tracked under `tests/LandStack.Api.Tests`;
-  frontend `*.spec.ts` files are absent. A successful build is compilation
-  evidence, not behavioral test coverage.
-- `npm test -- --watch=false` fails with missing `karma`; the referenced
-  `karma.conf.js` is also absent.
-- `npm run lint` fails because `@angular-devkit/build-angular:tslint` is absent.
-- E2E execution was not attempted: `e2e/protractor.conf.js` and
-  `e2e/tsconfig.json` are absent. `npm run e2e -- --help` only verifies CLI help.
-- Initialization reported NETSDK1138 for `net6.0`, NU1904 for LiteDB 5.0.11
-  (GHSA-3x49-g6rc-c284), and obsolete Compose `version`. The backend upgrade
-  targets .NET 11/LiteDB 5.0.21 and removes the Compose field; retain the original
-  findings as history. Old LiteDB is used only by excluded manual synthetic
-  fixture generators, never shipping/test runtime dependencies.
-
 For API/contract changes, build the API first and review regenerated models,
-then build the SPA. For frontend changes, build the SPA. For packaging changes,
-validate Compose and verify the affected image separately. Report unavailable
-checks explicitly; do not claim a test gate passed from build output.
+then run the SPA checks. For frontend changes, run lint, tests and the production
+build. For packaging changes, validate Compose and build/verify the affected
+image separately. Keep the lockfile and resolve tool compatibility without
+silently upgrading dependencies. The frontend GitHub Actions workflow runs clean
+install, lint, one-shot tests and production build; report hosted execution only
+when actually observed.
+
+Tests cover REST requests/components, fake SignalR commands/events/lifecycle,
+routing, and busy timing/concurrency/focus/cleanup. Add behavior assertions and
+failure/teardown coverage beside affected code. Generated models are excluded
+from handwritten-code ESLint rules. Karma/Jasmine and TSLint were replaced;
+the incomplete Protractor setup and e2e command were retired. Backend behavioral
+tests are tracked under `tests/LandStack.Api.Tests`; no automated browser
+end-to-end suite is tracked. Build output alone is not
+behavioral test coverage; report unavailable required checks explicitly.
+
+Known findings retained from initialization: NETSDK1138 for `net6.0`, NU1904 for
+LiteDB 5.0.11 (GHSA-3x49-g6rc-c284), and Compose's obsolete `version` field.
+The .NET 11/LiteDB 5.0.21 backend upgrade resolves those shipping findings and
+removes the Compose field; retain the original findings as history. Old LiteDB
+is used only by excluded manual synthetic fixture generators, not runtime
+dependencies. npm 12
+can report blocked dependency install scripts; observed frontend/image builds
+passed with the default policy. Inspect failures rather than weakening it.
 
 ## Running and manual verification
 
-The existing launch commands are `rtk proxy dotnet run` from the API directory
-and `rtk proxy npm start -- --port 8080` from the SPA directory. They were not
-smoke-tested during initialization. The API launch profile uses port 5000;
-`Program.cs` allows browser origin `http://localhost:8080`, while plain Angular
-`npm start` defaults to 4200 and will not match that CORS origin. Development
-SPA URLs point to port 5000. Production URLs point directly to localhost:8181;
-Compose publishes SPA 8080 and API 8181. Verify environment URLs and CORS together.
+`rtk proxy npm start` from the SPA directory uses port 8080, matching API CORS
+origin `http://localhost:8080`. The API launch profile uses 5000; development SPA
+URLs target 5000. Production URLs directly target localhost:8181; Compose
+publishes SPA 8080 and API 8181. Verify URLs and CORS together. Production browser
+assets are `dist/LandStack-Spa/browser`; the Docker output override uses
+`dist/out/browser`. Preserve Nginx's client-route fallback.
 
-For behavior changes, exercise list, create, toggle and delete in both the REST
-view (`/`) and realtime view (`/realtime`); use two browser clients when checking
-broadcasts. Record actual results and use an isolated database. Container image
-builds, container startup and browser behavior were not verified at initialization.
+For behavior changes, follow the disposable API/two-client procedure in
+[README.md](README.md#disposable-manual-verification). Set explicit external `LiteDb:DataDirectory` configuration (or an isolated
+content root with that data override) and record its
+absolute path, owned processes, client URLs and exact commit. Exercise list,
+create, toggle and delete in both `/` and `/realtime`, plus two-client broadcasts,
+validation, navigation/fallback and busy focus behavior. Record browser results
+separately from mocked tests and HTTP asset checks. Preserve application data and
+managed resource/evidence ownership throughout verification.
 
 ## Ownership and feature workflow
 

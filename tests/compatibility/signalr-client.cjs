@@ -17,7 +17,7 @@ for (let i = 2; i < process.argv.length; i += 2) {
 }
 assert(options['--output-root'] && path.isAbsolute(options['--output-root']), '--output-root must be an absolute external directory');
 const outputRoot = path.resolve(options['--output-root']);
-const git = (...args) => execFileSync('git', ['-C', repo, ...args], { encoding: 'utf8' }).trim();
+const git = (...args) => execFileSync('git', ['-C', repo, ...args], { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 }).trim();
 for (const entry of git('worktree', 'list', '--porcelain').split('\n').filter(line => line.startsWith('worktree '))) {
   const relative = path.relative(path.resolve(entry.slice(9)), outputRoot);
   assert(relative && (path.isAbsolute(relative) || relative === '..' || relative.startsWith(`..${path.sep}`)), 'Output must be outside every worktree');
@@ -29,9 +29,10 @@ const clientPackagePath = path.join(spa, 'node_modules/@microsoft/signalr/packag
 const clientPackage = JSON.parse(fs.readFileSync(clientPackagePath, 'utf8'));
 const lockedVersion = lock.packages?.['node_modules/@microsoft/signalr']?.version ?? lock.dependencies?.['@microsoft/signalr']?.version;
 assert.equal(clientPackage.version, lockedVersion, 'Installed SPA SignalR version must match committed lockfile');
-// SignalR 5 predates Node's global fetch and assumes its presence means browser self exists.
-// Select its shipped Node HTTP/cookie/abort polyfills only within this test process.
-globalThis.fetch = undefined;
+// Only legacy SignalR 5 assumes that a global fetch implies browser self exists.
+// Current clients retain their normal Node environment; the legacy check stays reproducible.
+const legacyNodePolyfills = Number(clientPackage.version.split('.')[0]) === 5 && typeof globalThis.fetch === 'function';
+if (legacyNodePolyfills) globalThis.fetch = undefined;
 const signalr = require(require.resolve('@microsoft/signalr', { paths: [spa] }));
 const dotnet = options['--dotnet'] ?? 'dotnet';
 const apiDirectory = path.join(repo, 'src/LandStack.Api');
@@ -52,7 +53,7 @@ const report = {
   stagedDiffSha256: crypto.createHash('sha256').update(git('diff', '--cached', '--binary')).digest('hex'),
   runnerSha256: crypto.createHash('sha256').update(fs.readFileSync(__filename)).digest('hex'),
   apiDllSha256: crypto.createHash('sha256').update(fs.readFileSync(apiDll)).digest('hex'),
-  apiSourceSha256: sourceHash.digest('hex'), httpEnvironment: 'SignalR 5 shipped Node polyfills; test-process global fetch disabled',
+  apiSourceSha256: sourceHash.digest('hex'), httpEnvironment: legacyNodePolyfills ? 'SignalR 5 shipped Node polyfills; test-process global fetch disabled' : 'Unmodified Node environment for the current locked SignalR client',
   clientVersion: clientPackage.version, lockedVersion, clientPackagePath,
   lockSha256: crypto.createHash('sha256').update(fs.readFileSync(lockPath)).digest('hex'),
   node: process.version, runDirectory: run, dataDirectory,
@@ -71,6 +72,9 @@ async function bounded(promise, description, milliseconds = 10000) {
       timer = setTimeout(() => reject(new Error(`Timed out: ${description}`)), milliseconds);
     })]);
   } finally { clearTimeout(timer); }
+}
+function invoke(client, method, ...args) {
+  return bounded(client.connection.invoke(method, ...args), `hub invocation ${method}`);
 }
 const sleep = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
 function checked(name, details = {}) { report.checks.push({ name, passed: true, ...details }); }
@@ -147,7 +151,7 @@ async function connectClients() {
       .configureLogging({ log: (level, message) => { if (level >= signalr.LogLevel.Warning) client.warnings.push({ level, message }); } })
       .build();
     for (const name of ['itemCreated', 'itemUpdated', 'itemDeleted'])
-      client.connection.on(name, (...args) => client.events.push({ name, args }));
+      client.connection.on(name, (...args) => { client.events.push({ name, args }); });
     return client;
   });
   await bounded(Promise.all(clients.map(c => c.connection.start())), 'two actual SPA-package WebSocket clients');
@@ -177,7 +181,7 @@ async function expectEvent(count, name, assertPayload) {
 }
 async function assertNoEvents(count) {
   // Invocation completions provide a message-order barrier after each invalid/no-op operation.
-  await bounded(Promise.all(clients.map(c => c.connection.invoke('GetAllItems'))), 'post-operation hub barriers');
+  await bounded(Promise.all(clients.map(c => invoke(c, 'GetAllItems'))), 'post-operation hub barriers');
   for (const client of clients) assert.equal(client.events.length, count, 'Invalid/no-op operation broadcast an event');
 }
 function assertItem(item, description, completed) {
@@ -202,9 +206,9 @@ function assertItem(item, description, completed) {
     let id;
     await clients[0].connection.send('Create', { description: '  Hub create ✓  ' });
     await expectEvent(1, 'itemCreated', item => { assertItem(item, '  Hub create ✓  ', false); id = item.toDoItemId; });
-    assert.equal((await clients[1].connection.invoke('GetAllItems'))[0].toDoItemId, id);
+    assert.equal((await invoke(clients[1], 'GetAllItems'))[0].toDoItemId, id);
     assert.equal((await request('GET', '/todoItem')).json()[0].toDoItemId, id);
-    await clients[1].connection.invoke('ToggleComplete', id);
+    await invoke(clients[1], 'ToggleComplete', id);
     await expectEvent(2, 'itemUpdated', item => { assertItem(item, '  Hub create ✓  ', true); assert.equal(item.toDoItemId, id); });
     await clients[0].connection.send('Delete', id);
     await expectEvent(3, 'itemDeleted', deleted => assert.equal(deleted, id));
@@ -220,10 +224,10 @@ function assertItem(item, description, completed) {
     await expectEvent(5, 'itemUpdated', item => assertItem(item, restItem.description, true));
     assert.equal((await request('DELETE', `/todoItem/${restItem.toDoItemId}`)).status, 200);
     await expectEvent(6, 'itemDeleted', deleted => assert.equal(deleted, restItem.toDoItemId));
-    checked('REST CRUD broadcasts to both old JavaScript clients with preserved status/body/Location');
+    checked('REST CRUD broadcasts to both locked JavaScript clients with preserved status/body/Location');
 
     for (const payload of [null, {}, { description: null }, { description: '' }, { description: ' \t\r\n' }]) {
-      await assert.rejects(bounded(clients[0].connection.invoke('Create', payload), 'invalid hub create'), /Description must contain non-whitespace text/);
+      await assert.rejects(invoke(clients[0], 'Create', payload), /Description must contain non-whitespace text/);
       const invalid = await request('POST', '/todoItem', payload);
       assert.equal(invalid.status, 400);
       assert.match(invalid.headers['content-type'], /^application\/problem\+json/);
@@ -231,11 +235,11 @@ function assertItem(item, description, completed) {
       await assertNoEvents(6);
     }
     const missing = crypto.randomUUID();
-    await assert.rejects(clients[0].connection.invoke('ToggleComplete', missing), /The to-do item was not found/);
+    await assert.rejects(invoke(clients[0], 'ToggleComplete', missing), /The to-do item was not found/);
     assert.equal((await request('POST', `/todoItem/toggleComplete/${missing}`)).status, 404);
-    await clients[1].connection.invoke('Delete', missing);
+    await invoke(clients[1], 'Delete', missing);
     assert.equal((await request('DELETE', `/todoItem/${missing}`)).status, 200);
-    await assert.rejects(clients[0].connection.invoke('ToggleComplete', 'not-a-guid'), error => !/stack|JsonException|System\./i.test(error.message));
+    await assert.rejects(invoke(clients[0], 'ToggleComplete', 'not-a-guid'), error => !/stack|JsonException|System\./i.test(error.message));
     assert.equal((await request('POST', '/todoItem/toggleComplete/not-a-guid')).status, 400);
     await assertNoEvents(6);
     assert.deepEqual((await request('GET', '/todoItem')).json(), []);
@@ -243,7 +247,7 @@ function assertItem(item, description, completed) {
 
     const persistent = (await request('POST', '/todoItem', { description: 'Persist across process restart' })).json();
     await expectEvent(7, 'itemCreated', item => assert.equal(item.toDoItemId, persistent.toDoItemId));
-    await clients[1].connection.invoke('ToggleComplete', persistent.toDoItemId);
+    await invoke(clients[1], 'ToggleComplete', persistent.toDoItemId);
     await expectEvent(8, 'itemUpdated', item => assert.equal(item.isCompleted, true));
     const beforeRestart = (await request('GET', '/todoItem')).json();
     await disconnectClients();
@@ -254,14 +258,14 @@ function assertItem(item, description, completed) {
     assert.deepEqual(restored, beforeRestart);
     assertItem(restored[0], persistent.description, true);
     for (const client of clients) {
-      const realtime = await client.connection.invoke('GetAllItems');
+      const realtime = await invoke(client, 'GetAllItems');
       assert.equal(realtime[0].toDoItemId, persistent.toDoItemId);
       assert.equal(realtime[0].isCompleted, true);
       assert.equal(Date.parse(realtime[0].createdDate), Date.parse(restored[0].createdDate));
     }
     assert.equal((await request('DELETE', `/todoItem/${persistent.toDoItemId}`)).status, 200);
     await expectEvent(1, 'itemDeleted', deleted => assert.equal(deleted, persistent.toDoItemId));
-    await clients[0].connection.invoke('Delete', persistent.toDoItemId);
+    await invoke(clients[0], 'Delete', persistent.toDoItemId);
     await assertNoEvents(1);
     assert.deepEqual((await request('GET', '/todoItem')).json(), []);
     checked('Real Kestrel process restart preserves IDs/text/completion/date meaning and clients reconnect to stored state');

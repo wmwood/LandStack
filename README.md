@@ -132,6 +132,18 @@ rtk proxy docker compose config --quiet
 rtk git diff --check
 ```
 
+After building the API and installing SPA dependencies, run the actual locked
+JavaScript client compatibility check from the repository root:
+
+```powershell
+$compatibilityOutput = Join-Path $env:TEMP 'LandStack-compatibility'
+rtk proxy node tests/compatibility/signalr-client.cjs --output-root $compatibilityOutput
+```
+
+It uses two real WebSocket clients and isolated API processes/data; see
+[compatibility verification](tests/compatibility/README.md) for prerequisites,
+evidence and lifecycle details.
+
 Review audit findings as well as exit codes. From `src/LandStack-Spa`, run
 `rtk proxy npm run build -- --configuration production` after installing the
 lockfile. Backend tests cover dispatcher behavior, isolated persistence and old

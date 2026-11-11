@@ -1,5 +1,5 @@
 using LandStack.Api.Infrastructure.Dto;
-using MediatR;
+using LandStack.Api.Infrastructure.Dispatcher;
 
 namespace LandStack.Api.Infrastructure.Features
 {

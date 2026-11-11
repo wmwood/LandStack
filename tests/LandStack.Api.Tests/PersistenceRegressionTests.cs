@@ -2,7 +2,7 @@ using LandStack.Api.Infrastructure.Data.Models;
 using LandStack.Api.Infrastructure.Dto;
 using LandStack.Api.Infrastructure.Features;
 using LandStack.Api.Infrastructure.Services;
-using MediatR;
+using LandStack.Api.Infrastructure.Dispatcher;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
@@ -21,28 +21,28 @@ public sealed class PersistenceRegressionTests
         var now = new DateTime(2026, 11, 11, 12, 34, 56, DateTimeKind.Utc);
         var clock = new TestClock { Now = now };
         using var services = database.OpenServices(clock);
-        var mediator = services.GetRequiredService<IMediator>();
+        var dispatcher = services.GetRequiredService<IDispatcher>();
         var notifications = services.GetRequiredService<RecordedNotifications>();
 
-        Assert.Empty(await mediator.Send(GetAllItemsRequest.Make(), TestContext.Current.CancellationToken));
-        var created = await mediator.Send(CreateTodoItemRequest.Make("Keep supplied text ✓"), TestContext.Current.CancellationToken);
+        Assert.Empty(await dispatcher.Execute(GetAllItemsRequest.Make(), TestContext.Current.CancellationToken));
+        var created = await dispatcher.Execute(CreateTodoItemRequest.Make("Keep supplied text ✓"), TestContext.Current.CancellationToken);
         Assert.NotEqual(Guid.Empty, created.ToDoItemId);
         Assert.Equal("Keep supplied text ✓", created.Description);
         Assert.False(created.IsCompleted);
         Assert.Equal(now, created.CreatedDate);
-        var listed = Assert.Single(await mediator.Send(GetAllItemsRequest.Make(), TestContext.Current.CancellationToken));
+        var listed = Assert.Single(await dispatcher.Execute(GetAllItemsRequest.Make(), TestContext.Current.CancellationToken));
         Assert.Equal(created.ToDoItemId, listed.ToDoItemId);
         Assert.Equal(created.Description, listed.Description);
         Assert.Equal(now, listed.CreatedDate.ToUniversalTime());
 
-        await mediator.Send(ToggleCompleteTodoItemRequest.Make(created.ToDoItemId), TestContext.Current.CancellationToken);
-        var completed = Assert.Single(await mediator.Send(GetAllItemsRequest.Make(), TestContext.Current.CancellationToken));
+        await dispatcher.Execute(ToggleCompleteTodoItemRequest.Make(created.ToDoItemId), TestContext.Current.CancellationToken);
+        var completed = Assert.Single(await dispatcher.Execute(GetAllItemsRequest.Make(), TestContext.Current.CancellationToken));
         Assert.True(completed.IsCompleted);
         Assert.Equal(created.Description, completed.Description);
         Assert.Equal(now, completed.CreatedDate.ToUniversalTime());
 
-        await mediator.Send(DeleteTodoItemRequest.Make(created.ToDoItemId), TestContext.Current.CancellationToken);
-        Assert.Empty(await mediator.Send(GetAllItemsRequest.Make(), TestContext.Current.CancellationToken));
+        await dispatcher.Execute(DeleteTodoItemRequest.Make(created.ToDoItemId), TestContext.Current.CancellationToken);
+        Assert.Empty(await dispatcher.Execute(GetAllItemsRequest.Make(), TestContext.Current.CancellationToken));
         Assert.Equal(new[] { NotificationAction.ItemCreated, NotificationAction.ItemUpdated, NotificationAction.ItemDeleted },
             notifications.Items.Select(n => n.Action));
         Assert.Equal(created.ToDoItemId, Assert.IsType<ToDoItemDto>(notifications.Items[0].Data).ToDoItemId);
@@ -62,8 +62,8 @@ public sealed class PersistenceRegressionTests
         Guid newId;
         using (var services = database.OpenServices(new TestClock { Now = newDate }))
         {
-            var mediator = services.GetRequiredService<IMediator>();
-            var existing = await mediator.Send(GetAllItemsRequest.Make(), TestContext.Current.CancellationToken);
+            var dispatcher = services.GetRequiredService<IDispatcher>();
+            var existing = await dispatcher.Execute(GetAllItemsRequest.Make(), TestContext.Current.CancellationToken);
             Assert.Equal(new[] { earlyId, lateId }, existing.Select(i => i.ToDoItemId));
             Assert.Equal("preserved legacy text", existing[0].Description);
             Assert.False(existing[0].IsCompleted);
@@ -71,14 +71,14 @@ public sealed class PersistenceRegressionTests
             Assert.Equal("Legacy café ✓", existing[1].Description);
             Assert.True(existing[1].IsCompleted);
             Assert.Equal(lateDate, existing[1].CreatedDate.ToUniversalTime());
-            await mediator.Send(ToggleCompleteTodoItemRequest.Make(earlyId), TestContext.Current.CancellationToken);
-            newId = (await mediator.Send(CreateTodoItemRequest.Make("New after upgrade"), TestContext.Current.CancellationToken)).ToDoItemId;
+            await dispatcher.Execute(ToggleCompleteTodoItemRequest.Make(earlyId), TestContext.Current.CancellationToken);
+            newId = (await dispatcher.Execute(CreateTodoItemRequest.Make("New after upgrade"), TestContext.Current.CancellationToken)).ToDoItemId;
         }
 
         using (var services = database.OpenServices(new TestClock { Now = newDate }))
         {
-            var mediator = services.GetRequiredService<IMediator>();
-            var restored = await mediator.Send(GetAllItemsRequest.Make(), TestContext.Current.CancellationToken);
+            var dispatcher = services.GetRequiredService<IDispatcher>();
+            var restored = await dispatcher.Execute(GetAllItemsRequest.Make(), TestContext.Current.CancellationToken);
             Assert.Equal(new[] { earlyId, lateId, newId }, restored.Select(i => i.ToDoItemId));
             Assert.True(restored[0].IsCompleted);
             Assert.Equal(earlyDate, restored[0].CreatedDate.ToUniversalTime());
@@ -86,12 +86,12 @@ public sealed class PersistenceRegressionTests
             Assert.Equal("New after upgrade", restored[2].Description);
             Assert.False(restored[2].IsCompleted);
             Assert.Equal(newDate, restored[2].CreatedDate.ToUniversalTime());
-            await mediator.Send(DeleteTodoItemRequest.Make(lateId), TestContext.Current.CancellationToken);
+            await dispatcher.Execute(DeleteTodoItemRequest.Make(lateId), TestContext.Current.CancellationToken);
         }
 
         using (var services = database.OpenServices(new TestClock { Now = newDate }))
         {
-            var restored = await services.GetRequiredService<IMediator>().Send(GetAllItemsRequest.Make(), TestContext.Current.CancellationToken);
+            var restored = await services.GetRequiredService<IDispatcher>().Execute(GetAllItemsRequest.Make(), TestContext.Current.CancellationToken);
             Assert.Equal(new[] { earlyId, newId }, restored.Select(i => i.ToDoItemId));
             Assert.Equal("preserved legacy text", restored[0].Description);
         }
@@ -106,10 +106,12 @@ internal sealed class TestClock : IClock
 internal sealed class RecordedNotifications : INotificationHandler<TodoNotification>
 {
     public List<TodoNotification> Items { get; } = [];
+    public List<CancellationToken> Tokens { get; } = [];
 
     public Task Handle(TodoNotification notification, CancellationToken cancellationToken)
     {
         Items.Add(notification);
+        Tokens.Add(cancellationToken);
         return Task.CompletedTask;
     }
 }
@@ -127,15 +129,16 @@ internal sealed class IsolatedDatabase : IDisposable
         AppDomain.CurrentDomain.SetData("DataDirectory", _directory);
     }
 
-    public ServiceProvider OpenServices(IClock clock)
+    public ServiceProvider OpenServices(IClock clock, Action<IServiceCollection>? configure = null)
     {
         var services = new ServiceCollection();
-        services.AddMediatR(typeof(GetAllItemsRequest));
+        services.AddTodoDispatcher();
         services.RemoveAll<INotificationHandler<TodoNotification>>();
         services.AddSingleton<RecordedNotifications>();
         services.AddSingleton<INotificationHandler<TodoNotification>>(p => p.GetRequiredService<RecordedNotifications>());
         services.AddSingleton(clock);
         services.AddSingleton<LiteDbProvider>();
+        configure?.Invoke(services);
         return services.BuildServiceProvider();
     }
 

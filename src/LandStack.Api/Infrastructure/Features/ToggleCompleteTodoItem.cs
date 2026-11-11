@@ -5,7 +5,7 @@ using LandStack.Api.Infrastructure.Data.Models;
 using LandStack.Api.Infrastructure.Dto;
 using LandStack.Api.Infrastructure.Services;
 using LiteDB;
-using MediatR;
+using LandStack.Api.Infrastructure.Dispatcher;
 
 namespace LandStack.Api.Infrastructure.Features
 {
@@ -22,16 +22,17 @@ namespace LandStack.Api.Infrastructure.Features
     public class ToggleCompleteTodoItem : IRequestHandler<ToggleCompleteTodoItemRequest>
     {
         private readonly ILiteCollection<ToDoItem> _items;
-        private readonly IMediator _mediator;
+        private readonly IDispatcher _dispatcher;
 
-        public ToggleCompleteTodoItem(LiteDbProvider dbProvider, IMediator mediator)
+        public ToggleCompleteTodoItem(LiteDbProvider dbProvider, IDispatcher dispatcher)
         {
             _items = dbProvider.Database.GetCollection<ToDoItem>(nameof(ToDoItem));
-            _mediator = mediator;
+            _dispatcher = dispatcher;
         }
 
-        public Task<Unit> Handle(ToggleCompleteTodoItemRequest request, CancellationToken cancellationToken)
+        public async Task Handle(ToggleCompleteTodoItemRequest request, CancellationToken cancellationToken)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var item = _items.FindById(request.ToDoItemId);
 
             var updatedItem = item with
@@ -41,9 +42,8 @@ namespace LandStack.Api.Infrastructure.Features
 
             _items.Update(updatedItem);
 
-            _mediator.Publish(TodoNotification.Make(NotificationAction.ItemUpdated, updatedItem));
+            await _dispatcher.Notify(TodoNotification.Make(NotificationAction.ItemUpdated, updatedItem), cancellationToken);
 
-            return Unit.Task;
         }
     }
 }

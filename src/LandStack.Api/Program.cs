@@ -7,7 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
-using MediatR;
+using LandStack.Api.Infrastructure.Dispatcher;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -29,7 +29,7 @@ builder.Services.AddControllers().AddNewtonsoftJson(options =>
 });
 
 builder.Services.AddSignalR();
-builder.Services.AddMediatR(typeof(Program));
+builder.Services.AddTodoDispatcher();
 builder.Services.AddSingleton<IClock, Clock>();
 builder.Services.AddSingleton<LiteDbProvider, LiteDbProvider>();
 

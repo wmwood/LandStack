@@ -4,7 +4,7 @@ using LandStack.Api.Infrastructure.Data.Models;
 using LandStack.Api.Infrastructure.Dto;
 using LandStack.Api.Infrastructure.Services;
 using LiteDB;
-using MediatR;
+using LandStack.Api.Infrastructure.Dispatcher;
 
 namespace LandStack.Api.Infrastructure.Features
 {
@@ -25,17 +25,18 @@ namespace LandStack.Api.Infrastructure.Features
     {
         private readonly IClock _clock;
         private readonly ILiteCollection<ToDoItem> _items;
-        private readonly IMediator _mediator;
+        private readonly IDispatcher _dispatcher;
 
-        public CreateTodoItem(LiteDbProvider dbProvider, IClock clock, IMediator mediator)
+        public CreateTodoItem(LiteDbProvider dbProvider, IClock clock, IDispatcher dispatcher)
         {
             _items = dbProvider.Database.GetCollection<ToDoItem>(nameof(ToDoItem));
             _clock = clock;
-            _mediator = mediator;
+            _dispatcher = dispatcher;
         }
 
-        public Task<ToDoItemDto> Handle(CreateTodoItemRequest request, CancellationToken cancellationToken)
+        public async Task<ToDoItemDto> Handle(CreateTodoItemRequest request, CancellationToken cancellationToken)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var item = new ToDoItem(request.Description, _clock.Now);
 
             _items.Insert(item);
@@ -48,9 +49,9 @@ namespace LandStack.Api.Infrastructure.Features
                 CreatedDate = item.CreatedDate
             };
 
-            _mediator.Publish(TodoNotification.Make(NotificationAction.ItemCreated, createdItem));
+            await _dispatcher.Notify(TodoNotification.Make(NotificationAction.ItemCreated, createdItem), cancellationToken);
 
-            return Task.FromResult(createdItem);
+            return createdItem;
         }
     }
 }

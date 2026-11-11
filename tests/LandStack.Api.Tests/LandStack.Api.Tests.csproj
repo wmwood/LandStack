@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net11.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <IsTestProject>true</IsTestProject>
+    <IsPackable>false</IsPackable>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" Version="4.0.3" />
+    <ProjectReference Include="../../src/LandStack.Api/LandStack.Api.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Remove="Fixtures/**/*.cs" />
+    <None Update="Fixtures/legacy-5.0.11.db" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

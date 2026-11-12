@@ -19,3 +19,9 @@ The [repository README](../../README.md) owns full setup, mocked component/servi
 test examples, CI/container details and disposable API/two-client verification.
 Karma/Jasmine and TSLint have been replaced; the incomplete Protractor setup was
 retired and there is no automated end-to-end command.
+
+The manifest scopes minimatch 11.0.1 overrides to ESLint's three affected dependency
+consumers to address [GHSA-g3hv-75wg-m249](https://github.com/advisories/GHSA-g3hv-75wg-m249).
+Their current releases still require minimatch 10. Remove these overrides once
+upstream releases accept the patched major version, then rerun audit, lint, tests
+and the production build.
